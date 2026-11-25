@@ -61,25 +61,28 @@ async function waitForRoundToGoLive(page) {
   });
 }
 
-async function clearNameField(page, nextName) {
-  const input = page.locator(".name-editor input");
-  await input.click();
-  await input.press(process.platform === "darwin" ? "Meta+A" : "Control+A");
+async function setName(page, nextName) {
+  // The name field lives in the settings menu (speaker button, top right).
+  await page.getByRole("button", { name: "Settings" }).click();
+  const input = page.getByLabel("Your name");
   await input.fill(nextName);
-  await page.getByRole("button", { name: "Save" }).click();
+  await input.press("Enter");
+  await page.keyboard.press("Escape");
 }
 
 async function captureLandingAssets(browser) {
   const page = await browser.newPage({
     viewport: {
       width: 1440,
-      height: 980
+      height: 900
     }
   });
 
   await page.goto(baseUrl, {
     waitUntil: "networkidle"
   });
+  // Let the looping demo play a few cards onto the line first.
+  await page.waitForTimeout(4500);
   await page.screenshot({
     path: path.join(docsAssetDir, "readme-hero.png")
   });
@@ -93,146 +96,116 @@ async function captureLandingAssets(browser) {
   await page.close();
 }
 
+async function playCard(page, value) {
+  await page.getByRole("button", { name: new RegExp(`^${value}`) }).click();
+}
+
+async function readyBoth(hostPage, guestPage) {
+  await hostPage.getByRole("button", { name: "Ready" }).click();
+  await guestPage.getByRole("button", { name: "Ready" }).click();
+}
+
 async function captureGameplayAssets(browser) {
+  // Level 3 is dealt so the guest can open with 14 (a clean play) and then
+  // jump the host's 30 with 41 (a misplay that costs a life but not the level).
   const room = await createRoom({
     seed: 123456,
     deals: {
-      1: {
-        host: [10],
-        guest: [90]
-      },
-      2: {
-        host: [40, 80],
-        guest: [25, 60]
-      }
+      1: { host: [10], guest: [90] },
+      2: { host: [9, 47], guest: [23, 88] },
+      3: { host: [30, 55, 72], guest: [14, 41, 95] }
     }
   });
 
-  const hostPage = await browser.newPage({
-    viewport: {
-      width: 1440,
-      height: 980
-    }
-  });
-  const guestContext = await browser.newContext({
-    viewport: {
-      width: 1440,
-      height: 980
-    }
-  });
+  const viewport = { width: 1440, height: 900 };
+  const hostPage = await browser.newPage({ viewport });
+  const guestContext = await browser.newContext({ viewport });
   const guestPage = await guestContext.newPage();
 
-  await hostPage.goto(room.hostInviteUrl, {
-    waitUntil: "networkidle"
-  });
-  await guestPage.goto(room.guestInviteUrl, {
-    waitUntil: "networkidle"
-  });
-
+  await hostPage.goto(room.hostInviteUrl, { waitUntil: "networkidle" });
+  await guestPage.goto(room.guestInviteUrl, { waitUntil: "networkidle" });
   await waitForPhase(hostPage, "between_levels");
   await waitForPhase(guestPage, "between_levels");
 
-  await clearNameField(hostPage, "Mira");
-  await clearNameField(guestPage, "Jonas");
-  await waitForTimeout(300);
-  await hostPage.evaluate(() => window.scrollTo(0, 0));
-  await guestPage.evaluate(() => window.scrollTo(0, 0));
+  await setName(hostPage, "Mira");
+  await setName(guestPage, "Jonas");
+  await waitForTimeout(400);
 
-  await hostPage.screenshot({
-    path: path.join(docsAssetDir, "readme-room-ready.png")
-  });
-  await hostPage.screenshot({
-    path: path.join(frameDir, "room-flow-01-ready.png")
-  });
+  await hostPage.screenshot({ path: path.join(docsAssetDir, "readme-room-ready.png") });
+  await hostPage.screenshot({ path: path.join(frameDir, "room-flow-01-ready.png") });
 
-  await hostPage.getByRole("button", { name: "Ready" }).click();
-  await guestPage.getByRole("button", { name: "Ready" }).click();
-  await hostPage.waitForTimeout(250);
-
-  await hostPage.screenshot({
-    path: path.join(docsAssetDir, "readme-focus-overlay.png")
-  });
-  await hostPage.screenshot({
-    path: path.join(frameDir, "room-flow-02-focus.png")
-  });
+  await readyBoth(hostPage, guestPage);
+  await hostPage.waitForTimeout(500);
+  await hostPage.screenshot({ path: path.join(docsAssetDir, "readme-focus-overlay.png") });
+  await hostPage.screenshot({ path: path.join(frameDir, "room-flow-02-focus.png") });
 
   await hostPage.waitForTimeout(focusDelayMs);
-
   await waitForRoundToGoLive(hostPage);
   await waitForRoundToGoLive(guestPage);
-  await hostPage.screenshot({
-    path: path.join(docsAssetDir, "readme-live-round.png")
-  });
-  await hostPage.screenshot({
-    path: path.join(frameDir, "room-flow-03-live-round.png")
-  });
+  await hostPage.screenshot({ path: path.join(frameDir, "room-flow-03-live-round.png") });
 
-  const mobileRoom = await createRoom({
-    seed: 654321,
-    deals: {
-      1: {
-        host: [21],
-        guest: [79]
-      }
-    }
-  });
+  await playCard(hostPage, 10);
+  await hostPage.waitForTimeout(700);
+  await hostPage.screenshot({ path: path.join(frameDir, "room-flow-04-played.png") });
 
-  const mobileContext = await browser.newContext({
-    ...devices["Pixel 7"]
-  });
-  const mobileGuestContext = await browser.newContext({
-    viewport: {
-      width: 1280,
-      height: 900
-    }
-  });
-  const mobilePage = await mobileContext.newPage();
-  const mobileGuestPage = await mobileGuestContext.newPage();
-
-  await mobilePage.goto(mobileRoom.hostInviteUrl, {
-    waitUntil: "networkidle"
-  });
-  await mobileGuestPage.goto(mobileRoom.guestInviteUrl, {
-    waitUntil: "networkidle"
-  });
-  await waitForPhase(mobilePage, "between_levels");
-  await mobilePage.screenshot({
-    path: path.join(docsAssetDir, "readme-mobile-room.png")
-  });
-
-  await hostPage.getByRole("button", { name: /10/ }).click();
-  await guestPage.getByRole("button", { name: /90/ }).click();
+  await playCard(guestPage, 90);
   await waitForLevel(hostPage, 2);
-  await waitForPhase(hostPage, "between_levels");
-  await hostPage.screenshot({
-    path: path.join(docsAssetDir, "readme-level-clear.png")
-  });
-  await hostPage.screenshot({
-    path: path.join(frameDir, "room-flow-04-level-clear.png")
-  });
+  // Mid-celebration: the line lights up in play order while the melody replays.
+  await hostPage.waitForTimeout(650);
+  await hostPage.screenshot({ path: path.join(docsAssetDir, "readme-level-clear.png") });
+  await hostPage.screenshot({ path: path.join(frameDir, "room-flow-05-level-clear.png") });
 
-  await hostPage.getByRole("button", { name: "Ready" }).click();
-  await guestPage.getByRole("button", { name: "Ready" }).click();
+  // Level 2, played cleanly.
+  await hostPage.waitForTimeout(1600);
+  await readyBoth(hostPage, guestPage);
   await hostPage.waitForTimeout(focusDelayMs);
   await waitForRoundToGoLive(hostPage);
+  for (const [page, value] of [[hostPage, 9], [guestPage, 23], [hostPage, 47], [guestPage, 88]]) {
+    await playCard(page, value);
+    await hostPage.waitForTimeout(450);
+  }
+  await waitForLevel(hostPage, 3);
 
-  await hostPage.screenshot({
-    path: path.join(frameDir, "misplay-flow-01-live-round.png")
-  });
-  await hostPage.getByRole("button", { name: /40/ }).click();
+  // Level 3: the live round shot, then the misplay.
+  await hostPage.waitForTimeout(2000);
+  await readyBoth(hostPage, guestPage);
+  await hostPage.waitForTimeout(focusDelayMs);
+  await waitForRoundToGoLive(hostPage);
+  await playCard(guestPage, 14);
+  await hostPage.waitForTimeout(800);
+  await hostPage.screenshot({ path: path.join(docsAssetDir, "readme-live-round.png") });
+  await hostPage.screenshot({ path: path.join(frameDir, "misplay-flow-01-live-round.png") });
+
+  await playCard(guestPage, 41);
   await waitForLives(hostPage, 1);
-  await hostPage.waitForTimeout(250);
-  await hostPage.screenshot({
-    path: path.join(docsAssetDir, "readme-misplay.png")
-  });
-  await hostPage.screenshot({
-    path: path.join(frameDir, "misplay-flow-02-life-lost.png")
-  });
+  await hostPage.waitForTimeout(350);
+  await hostPage.screenshot({ path: path.join(docsAssetDir, "readme-misplay.png") });
+  await hostPage.screenshot({ path: path.join(frameDir, "misplay-flow-02-life-lost.png") });
 
   const finalState = await renderState(hostPage);
   if (finalState.lives !== 1) {
     throw new Error("Expected the misplay capture to end with one remaining life.");
   }
+
+  // Mobile: a live round on a phone-sized screen.
+  const mobileRoom = await createRoom({
+    seed: 654321,
+    deals: {
+      1: { host: [21], guest: [79] }
+    }
+  });
+  const mobileContext = await browser.newContext({ ...devices["Pixel 7"] });
+  const mobileGuestContext = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const mobilePage = await mobileContext.newPage();
+  const mobileGuestPage = await mobileGuestContext.newPage();
+  await mobilePage.goto(mobileRoom.hostInviteUrl, { waitUntil: "networkidle" });
+  await mobileGuestPage.goto(mobileRoom.guestInviteUrl, { waitUntil: "networkidle" });
+  await waitForPhase(mobilePage, "between_levels");
+  await readyBoth(mobilePage, mobileGuestPage);
+  await mobilePage.waitForTimeout(focusDelayMs);
+  await waitForRoundToGoLive(mobilePage);
+  await mobilePage.waitForTimeout(300);
+  await mobilePage.screenshot({ path: path.join(docsAssetDir, "readme-mobile-room.png") });
 
   await mobileGuestContext.close();
   await mobileContext.close();

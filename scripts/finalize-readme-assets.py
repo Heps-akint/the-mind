@@ -24,9 +24,10 @@ GIF_MANIFEST = {
             "room-flow-01-ready.png",
             "room-flow-02-focus.png",
             "room-flow-03-live-round.png",
-            "room-flow-04-level-clear.png",
+            "room-flow-04-played.png",
+            "room-flow-05-level-clear.png",
         ],
-        "durations": [1200, 1000, 1100, 1400],
+        "durations": [1200, 1000, 1000, 1100, 1500],
         "width": 1100,
     },
     "readme-misplay-flow.gif": {

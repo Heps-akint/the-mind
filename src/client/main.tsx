@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "@client/app";
 import { installClientTestHooks } from "@client/store";
+import "@fontsource-variable/bricolage-grotesque/standard.css";
 import "@client/styles.css";
 
 installClientTestHooks();

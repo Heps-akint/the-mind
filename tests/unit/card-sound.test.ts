@@ -9,7 +9,13 @@ import {
   type DebugRoomPreset,
   type RoomEngineState
 } from "@shared/game-core";
-import { getRoomSoundCue } from "@client/card-sound";
+import {
+  CARD_PITCH_STEPS,
+  describeSoundEvents,
+  frequencyForCard,
+  getRoomSoundCue,
+  noteIndexForCard
+} from "@client/card-sound";
 
 function makeLiveState(level: number, debugPreset: DebugRoomPreset): RoomEngineState {
   let state = createRoomEngineState({
@@ -91,5 +97,59 @@ describe("room sound cues", () => {
     const after = playLowestCard(midRound, "guest", 120).state;
 
     expect(getRoomSoundCue(toHostView(midRound), toHostView(after))).toBe("level_clear");
+  });
+});
+
+describe("card pitch mapping", () => {
+  it("never falls as the card value rises, so a clean pile always climbs", () => {
+    for (let value = 2; value <= 100; value += 1) {
+      expect(frequencyForCard(value)).toBeGreaterThanOrEqual(frequencyForCard(value - 1));
+    }
+  });
+
+  it("spans the full scale from 1 to 100", () => {
+    expect(noteIndexForCard(1)).toBe(0);
+    expect(noteIndexForCard(100)).toBe(CARD_PITCH_STEPS - 1);
+    expect(frequencyForCard(1)).toBeCloseTo(146.83, 1);
+    expect(frequencyForCard(100)).toBeCloseTo(146.83 * 8, 0);
+  });
+});
+
+describe("room sound events", () => {
+  it("plays your card close and your partner's card from across the table", () => {
+    const roundStart = makeLiveState(1, {
+      deals: {
+        1: {
+          host: [10],
+          guest: [90]
+        }
+      }
+    });
+    const afterHost = playLowestCard(roundStart, "host", 100).state;
+    const afterGuest = playLowestCard(afterHost, "guest", 120).state;
+
+    expect(describeSoundEvents(toHostView(roundStart), toHostView(afterHost))).toEqual([
+      { kind: "card", resolution: "played", source: "self", value: 10 }
+    ]);
+
+    const clearEvents = describeSoundEvents(toHostView(afterHost), toHostView(afterGuest));
+    expect(clearEvents[0]).toEqual({ kind: "card", resolution: "played", source: "partner", value: 90 });
+    expect(clearEvents).toContainEqual({ kind: "level_clear", melody: [10, 90] });
+  });
+
+  it("breaks the line after the cards land when a misplay costs a life", () => {
+    const before = makeLiveState(2, {
+      deals: {
+        2: {
+          host: [40, 80],
+          guest: [25, 60]
+        }
+      }
+    });
+    const after = playLowestCard(before, "host", 100).state;
+    const events = describeSoundEvents(toHostView(before), toHostView(after));
+
+    expect(events.map((event) => event.kind)).toEqual(["card", "card", "misplay"]);
+    expect(events[events.length - 1]).toEqual({ kind: "misplay", value: 40 });
   });
 });

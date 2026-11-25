@@ -11,15 +11,17 @@ export type ConnectionState =
   | "error";
 
 export type BannerTone = "neutral" | "success" | "warning" | "danger";
-export type BannerCelebration = "level_clear" | "run_complete" | null;
+// Drives the one-off visual that accompanies a banner (table flash, line glow).
+export type BannerEffect = "level_clear" | "run_complete" | "life_lost" | null;
 
 export interface BannerState {
-  celebration: BannerCelebration;
+  effect: BannerEffect;
   tone: BannerTone;
   text: string;
 }
 
-const LEVEL_ADVANCE_OVERLAY_DELAY_MS = 1000;
+// Long enough for the level's melody to replay over the finished line before the ready screen.
+const LEVEL_ADVANCE_OVERLAY_DELAY_MS = 1800;
 
 interface RoomStoreState {
   snapshot: RoomState | null;
@@ -49,47 +51,47 @@ function bannerFromEvent(event: ServerEvent): BannerState | null {
       return null;
     case "misplay_resolved":
       return {
-        celebration: null,
+        effect: "life_lost",
         tone: "danger",
-        text: `Life lost. ${event.card} landed too early.`
+        text: `Life lost. ${event.card} was played too early.`
       };
     case "pause_state_changed":
       return {
-        celebration: null,
+        effect: null,
         tone: event.resumed ? "neutral" : "warning",
-        text: event.resumed ? "Round back on." : "Round paused."
+        text: event.resumed ? "Back on." : "Round paused."
       };
     case "scan_state_changed":
       return {
-        celebration: null,
+        effect: null,
         tone: event.accepted ? "neutral" : "warning",
         text: event.resolved
           ? event.accepted
-            ? "Throwing star used."
-            : "Throwing star kept."
+            ? "Star thrown."
+            : "Star kept for later."
           : "Throwing star requested."
       };
     case "level_cleared":
       return {
-        celebration: "level_clear",
+        effect: "level_clear",
         tone: "success",
-        text: `Level ${event.clearedLevel} cleared.`
+        text: `Level ${event.clearedLevel} done!`
       };
     case "game_won":
       return {
-        celebration: "run_complete",
+        effect: "run_complete",
         tone: "success",
-        text: "Run finished."
+        text: "All 12 done!"
       };
     case "game_lost":
       return {
-        celebration: null,
+        effect: "life_lost",
         tone: "danger",
         text: "Out of lives."
       };
     case "room_error":
       return {
-        celebration: null,
+        effect: null,
         tone: "danger",
         text: event.message
       };
@@ -187,7 +189,7 @@ export const useRoomStore = create<RoomStoreState>((set) => ({
       error,
       banner: error
         ? {
-            celebration: null,
+            effect: null,
             tone: "danger",
             text: error
           }

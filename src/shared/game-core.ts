@@ -556,7 +556,7 @@ export function playLowestCard(state: RoomEngineState, seatId: SeatId, now: numb
           playedCard: playedValue,
           discardedCards: sortedDiscardedCards(discardedCards, null),
           livesRemaining: lives,
-          message: `Life lost. ${playedValue} landed too early.`
+          message: `Life lost. ${playedValue} was played too early.`
         }
       : null;
 
